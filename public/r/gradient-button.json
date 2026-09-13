@@ -1,0 +1,17 @@
+{
+  "$schema": "https://ui.shadcn.com/schema/registry-item.json",
+  "name": "gradient-button",
+  "title": "Gradient Button",
+  "description": "A button with a customizable two-color gradient background, built on top of shadcn/ui's Button.",
+  "registryDependencies": [
+    "button"
+  ],
+  "files": [
+    {
+      "path": "registry/default/gradient-button/gradient-button.tsx",
+      "content": "import * as React from \"react\"\n\nimport { Button } from \"@/components/ui/button\"\nimport { cn } from \"@/lib/utils\"\n\nexport interface GradientButtonProps\n  extends React.ComponentProps<typeof Button> {\n  fromColor?: string\n  toColor?: string\n}\n\nexport function GradientButton({\n  fromColor = \"#6366f1\",\n  toColor = \"#ec4899\",\n  className,\n  style,\n  ...props\n}: GradientButtonProps) {\n  return (\n    <Button\n      {...props}\n      className={cn(\n        \"border-0 text-white shadow-md transition-opacity hover:opacity-90\",\n        className\n      )}\n      style={\n        {\n          background: `linear-gradient(to right, ${fromColor}, ${toColor})`,\n          ...style,\n        } as React.CSSProperties\n      }\n    />\n  )\n}",
+      "type": "registry:component"
+    }
+  ],
+  "type": "registry:component"
+}
