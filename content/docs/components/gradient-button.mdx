@@ -1,0 +1,27 @@
+---
+title: Gradient Button
+description: A customizable gradient button built on top of shadcn/ui.
+url: /docs/components/gradient-button
+---
+
+A customizable button with a two-color gradient background, built on top of the shadcn/ui Button component.
+
+<include lang="tsx" meta='title="gradient-button.tsx"'>
+  ../../../registry/default/gradient-button/gradient-button.tsx
+</include>
+
+## Usage
+
+```tsx
+import { GradientButton } from "@/components/gradient-button"
+
+export function Example() {
+  return (
+    <GradientButton
+      fromColor="#6366f1"
+      toColor="#ec4899"
+    >
+      Gradient Button
+    </GradientButton>
+  )
+}

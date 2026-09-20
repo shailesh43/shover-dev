@@ -1,0 +1,11 @@
+{
+  "root": true,
+  "pages": [
+    "---Overview---",
+    "index",
+    "getting-started",
+    "/components",
+    "---Contributing---",
+    "contributing-guide"
+  ]
+}

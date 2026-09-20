@@ -1,0 +1,6 @@
+{
+  "title": "Components",
+  "icon": "Component",
+  "pages": ["gradient-button", "apple-hello"],
+  "defaultOpen": true
+}
