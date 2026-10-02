@@ -1,0 +1,533 @@
+---
+title: Contributing
+description: Help improve Shover by contributing components, fixes, documentation, and ideas.
+url: /docs/contributing-guide
+icon: HandHeart
+---
+
+Shover is a shadcn-compatible component registry, not an npm package. The shadcn CLI fetches a JSON file from your domain and copies the source code directly into the consumer's project.
+
+
+## Table of Contents
+
+1. [Project Overview](#1-project-overview)
+2. [One-Time Setup](#2-one-time-setup)
+3. [Folder Structure](#3-folder-structure)
+4. [Registry Config](#4-registry-config)
+5. [Fumadocs Config](#5-fumadocs-config)
+6. [Build Step](#6-build-step)
+7. [Your First Component](#7-your-first-component)
+8. [Testing the Pipeline](#8-testing-the-pipeline)
+9. [Docs Page Template](#9-docs-page-template)
+10. [Deploy](#10-deploy)
+11. [Adding New Components](#11-adding-new-components)
+
+---
+
+## 1. Project Overview
+
+When someone runs any of the following, the shadcn CLI resolves `@shover` to your domain and fetches `https://shover.dev/r/{name}.json`:
+
+```npm
+npm install @shover/github-contributions
+```
+
+All four package managers invoke the same CLI binary — if `npx` works, the rest works automatically.
+
+Your repo has one responsibility per route:
+
+- `app/(landing)` — homepage
+- `app/docs` — Fumadocs documentation
+- `app/showcases` — live examples
+- `registry/` — distributable source (what gets published)
+- `public/r/` — generated JSON the CLI fetches (never edit by hand)
+
+---
+
+## 2. One-Time Setup
+
+```bash
+npx create-next-app@latest shover --typescript --tailwind --eslint --app --import-alias "@/*"
+cd shover
+npx shadcn@latest init
+```
+
+When `shadcn init` prompts you: pick any style, set CSS variables to `Yes` (consumers expect it). This creates `components.json` — leave it as-is.
+
+```bash
+npm install fumadocs-ui fumadocs-core fumadocs-mdx
+```
+
+Verify the base app works before touching anything else:
+
+```bash
+npx shadcn@latest add button
+npm run dev
+```
+
+If the button renders at `localhost:3000`, commit and push. Fix anything broken here before moving on.
+
+---
+
+## 3. Folder Structure
+
+```
+shover/
+├── app/
+│   ├── (landing)/page.tsx          # homepage
+│   ├── docs/
+│   │   ├── layout.tsx              # Fumadocs DocsLayout
+│   │   └── [[...slug]]/page.tsx    # catch-all
+│   ├── showcases/page.tsx
+│   ├── layout.config.tsx           # shared nav options
+│   └── layout.tsx                  # RootProvider
+│
+├── content/docs/                   # MDX content
+│   ├── index.mdx
+│   └── components/
+│       └── github-contributions.mdx
+│
+├── registry/                       # distributable source — public code
+│   └── github-contributions/
+│       ├── github-contributions.tsx
+│       └── use-contributions.ts
+│
+├── public/r/                       # generated JSON — never edit
+│   └── github-contributions.json
+│
+├── src/
+│   ├── components/                 # site-only UI, never published
+│   └── lib/source.ts               # Fumadocs source loader
+│
+├── registry.json
+├── components.json
+├── source.config.ts
+└── package.json
+```
+
+Hard rule: `registry/` is public. `src/components/` is private. Never mix them.
+
+---
+
+## 4. Registry Config
+
+Create `registry.json` at the repo root with zero items to start:
+
+```json
+{
+  "$schema": "https://ui.shadcn.com/schema/registry.json",
+  "name": "shover",
+  "homepage": "https://shover.dev",
+  "items": []
+}
+```
+
+`"name"` becomes the `@shover` namespace. `"homepage"` is where your `public/r/` files are served from. Never change either after publishing.
+
+Each item in `"items"` follows this shape:
+
+```json
+{
+  "name": "github-contributions",
+  "type": "registry:component",
+  "title": "GitHub Contributions",
+  "description": "A GitHub-style contributions graph.",
+  "files": [
+    {
+      "path": "registry/github-contributions/github-contributions.tsx",
+      "type": "registry:component"
+    },
+    {
+      "path": "registry/github-contributions/use-contributions.ts",
+      "type": "registry:hook"
+    }
+  ],
+  "dependencies": ["date-fns"]
+}
+```
+
+File paths are relative to the repo root. `"dependencies"` lists npm packages the CLI auto-installs in the consumer's project — omit it if there are none beyond React and shadcn.
+
+Valid file types: `registry:component`, `registry:hook`, `registry:lib`, `registry:ui`, `registry:block`.
+
+---
+
+## 5. Fumadocs Config
+
+### `source.config.ts`
+
+```ts
+import { defineDocs, defineConfig } from "fumadocs-mdx/config";
+
+export const docs = defineDocs({ dir: "content/docs" });
+
+export default defineConfig();
+```
+
+### `next.config.ts`
+
+```ts
+import type { NextConfig } from "next";
+import { createMDX } from "fumadocs-mdx/next";
+
+const withMDX = createMDX();
+const nextConfig: NextConfig = {};
+
+export default withMDX(nextConfig);
+```
+
+### `tsconfig.json` — add the collections alias
+
+```json
+{
+  "compilerOptions": {
+    "paths": {
+      "@/*": ["./src/*"],
+      "collections/*": ["./.source/*"]
+    }
+  }
+}
+```
+
+### `src/lib/source.ts`
+
+```ts
+import { docs } from "collections/server";
+import { loader } from "fumadocs-core/source";
+
+export const source = loader({
+  baseUrl: "/docs",
+  source: docs.toFumadocsSource(),
+});
+```
+
+### `app/layout.config.tsx`
+
+```tsx
+import type { BaseLayoutProps } from "fumadocs-ui/layouts/shared";
+
+export const baseOptions: BaseLayoutProps = {
+  nav: { title: "Shover" },
+  links: [
+    { text: "Docs", url: "/docs" },
+    { text: "Showcases", url: "/showcases" },
+  ],
+};
+```
+
+### `app/layout.tsx`
+
+```tsx
+import { RootProvider } from "fumadocs-ui/provider/next";
+import type { ReactNode } from "react";
+import "./globals.css";
+
+export default function RootLayout({ children }: { children: ReactNode }) {
+  return (
+    <html lang="en" suppressHydrationWarning>
+      <body>
+        <RootProvider>{children}</RootProvider>
+      </body>
+    </html>
+  );
+}
+```
+
+### `app/docs/layout.tsx`
+
+```tsx
+import { source } from "@/lib/source";
+import { DocsLayout } from "fumadocs-ui/layouts/docs";
+import type { ReactNode } from "react";
+import { baseOptions } from "@/app/layout.config";
+
+export default function Layout({ children }: { children: ReactNode }) {
+  return (
+    <DocsLayout tree={source.pageTree} {...baseOptions}>
+      {children}
+    </DocsLayout>
+  );
+}
+```
+
+### `app/docs/[[...slug]]/page.tsx`
+
+```tsx
+import { source } from "@/lib/source";
+import { DocsPage, DocsBody, DocsTitle, DocsDescription } from "fumadocs-ui/page";
+import { notFound } from "next/navigation";
+import defaultMdxComponents from "fumadocs-ui/mdx";
+
+export default async function Page({ params }: { params: { slug?: string[] } }) {
+  const page = source.getPage(params.slug);
+  if (!page) notFound();
+  const MDX = page.data.body;
+
+  return (
+    <DocsPage toc={page.data.toc}>
+      <DocsTitle>{page.data.title}</DocsTitle>
+      <DocsDescription>{page.data.description}</DocsDescription>
+      <DocsBody>
+        <MDX components={defaultMdxComponents} />
+      </DocsBody>
+    </DocsPage>
+  );
+}
+
+export async function generateStaticParams() {
+  return source.generateParams();
+}
+```
+
+Create `content/docs/index.mdx` with a title and description frontmatter. Visit `localhost:3000/docs` — if the sidebar renders, Fumadocs is working.
+
+---
+
+## 6. Build Step
+
+`shadcn build` reads `registry.json`, inlines your source file contents into JSON, and writes one file per item to `public/r/`. Wire it so it runs automatically:
+
+```json
+{
+  "scripts": {
+    "dev": "next dev",
+    "predev": "shadcn build",
+    "build": "next build",
+    "prebuild": "shadcn build",
+    "registry:build": "shadcn build"
+  }
+}
+```
+
+`predev` and `prebuild` run automatically in npm, pnpm, yarn, and bun before their matching script. You never need to run `shadcn build` manually.
+
+---
+
+## 7. Your First Component
+
+### Write the source files
+
+`registry/github-contributions/github-contributions.tsx`:
+
+```tsx
+"use client";
+
+import { useContributions } from "./use-contributions";
+
+export function GithubContributions({ username }: { username: string }) {
+  const { data, isLoading } = useContributions(username);
+
+  if (isLoading) return <div className="text-sm text-muted-foreground">Loading...</div>;
+
+  return (
+    <div className="flex flex-wrap gap-1">
+      {data?.map((day) => (
+        <div
+          key={day.date}
+          title={`${day.count} contributions on ${day.date}`}
+          className="h-3 w-3 rounded-sm bg-green-500"
+          style={{ opacity: Math.min(day.count / 10, 1) }}
+        />
+      ))}
+    </div>
+  );
+}
+```
+
+`registry/github-contributions/use-contributions.ts`:
+
+```ts
+import { useEffect, useState } from "react";
+
+interface ContributionDay {
+  date: string;
+  count: number;
+}
+
+export function useContributions(username: string) {
+  const [data, setData] = useState<ContributionDay[]>();
+  const [isLoading, setIsLoading] = useState(true);
+
+  useEffect(() => {
+    // replace with your real fetch
+    setIsLoading(false);
+  }, [username]);
+
+  return { data, isLoading };
+}
+```
+
+> Registry code must be self-contained. Never import from `@/components` or anything in `src/` that isn't also being published. It will break the moment someone installs it.
+
+### Add to `registry.json`
+
+```json
+{
+  "$schema": "https://ui.shadcn.com/schema/registry.json",
+  "name": "shover",
+  "homepage": "https://shover.dev",
+  "items": [
+    {
+      "name": "github-contributions",
+      "type": "registry:component",
+      "title": "GitHub Contributions",
+      "description": "A GitHub-style contributions graph.",
+      "files": [
+        {
+          "path": "registry/github-contributions/github-contributions.tsx",
+          "type": "registry:component"
+        },
+        {
+          "path": "registry/github-contributions/use-contributions.ts",
+          "type": "registry:hook"
+        }
+      ]
+    }
+  ]
+}
+```
+
+### Build and verify
+
+```bash
+npm run dev
+cat public/r/github-contributions.json
+```
+
+The JSON should contain your actual source code inlined, not just path references. If `content` fields are empty, your `"path"` values don't match the real file paths from the repo root.
+
+---
+
+## 8. Testing the Pipeline
+
+Do this in a separate throwaway project — not inside your Shover repo.
+
+```bash
+npx create-next-app@latest shover-consumer --typescript --tailwind --app
+cd shover-consumer
+npx shadcn@latest init
+```
+
+Add the namespace to `shover-consumer/components.json`:
+
+```json
+{
+  "registries": {
+    "@shover": "http://localhost:3000/r/{name}.json"
+  }
+}
+```
+
+Keep your Shover dev server running, then from the consumer:
+
+```bash
+npx shadcn@latest add @shover/github-contributions
+```
+
+Confirm the files land in the consumer's `components/` folder with the correct contents. Render the component to verify no import errors. Spot-check with pnpm:
+
+```bash
+pnpm dlx shadcn@latest add @shover/github-contributions
+```
+
+If both work, bun and yarn follow identically.
+
+---
+
+## 9. Docs Page Template
+
+Every component gets one MDX file. Use this as the template — only the content changes per component.
+
+`content/docs/components/github-contributions.mdx`:
+
+````mdx
+---
+title: GitHub Contributions
+description: A GitHub-style contributions graph for any username.
+---
+
+## Installation
+
+```npm
+npm install @shover/github-contributions
+```
+
+## Usage
+
+```tsx
+import { GithubContributions } from "@/components/github-contributions";
+
+export default function Page() {
+  return <GithubContributions username="yourusername" />;
+}
+```
+
+## Props
+
+| Prop       | Type     | Required | Description                    |
+| ---------- | -------- | -------- | ------------------------------ |
+| `username` | `string` | Yes      | GitHub username to display for |
+
+## Notes
+
+`use-contributions.ts` ships alongside the component. Replace the fetch logic
+inside it to connect to GitHub's GraphQL API or your own endpoint.
+````
+
+> The `\`\`\`npm` code block uses the `remarkNpm` plugin from `fumadocs-core` to auto-generate the npm/pnpm/yarn/bun tabs. See [Build Step](#6-build-step) for setup — it's enabled by default in Fumadocs MDX with no extra config needed.
+
+---
+
+## 10. Deploy
+
+Connect the GitHub repo in Vercel's dashboard. `prebuild` runs `shadcn build` before `next build` automatically — no extra config needed.
+
+After deploy, verify once against production. Update the consumer's `components.json`:
+
+```json
+{
+  "registries": {
+    "@shover": "https://shover.dev/r/{name}.json"
+  }
+}
+```
+
+Run the install command and confirm it works. That's it.
+
+---
+
+## 11. Adding New Components
+
+This is the checklist for every component going forward. Use it as your internal workflow and publish it as the contribution guide for external contributors.
+
+```
+1.  mkdir registry/<component-name>
+
+2.  Write .tsx and .ts files inside it.
+    - Self-contained only. No imports from src/components.
+
+3.  Add entry to registry.json
+    - name, type, title, description, files[], dependencies[]
+
+4.  npm run dev
+    - predev auto-runs shadcn build
+    - Check public/r/<component-name>.json has real code inlined
+
+5.  Test install from a consumer project:
+    npx shadcn@latest add @shover/<component-name>
+    Render it, confirm no errors.
+
+6.  Create content/docs/components/<component-name>.mdx
+    - Frontmatter: title, description
+    - Installation block (npm codeblock — remarkNpm handles the tabs)
+    - Usage example
+    - Props table
+    - Notes on customization
+
+7.  Confirm doc page renders at localhost:3000/docs/components/<component-name>
+
+8.  (Optional) Add to /showcases
+
+9.  git add . && git commit -m "feat: add <component-name>" && git push
+    Vercel auto-deploys.
+```
